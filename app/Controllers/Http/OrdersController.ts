@@ -1,5 +1,29 @@
 import type { HttpContextContract } from "@ioc:Adonis/Core/HttpContext";
 import Order from "App/Models/Order";
+import { schema, rules } from "@ioc:Adonis/Core/Validator";
+
+const createOrderValidator = schema.create({
+  clientId: schema.number([
+    rules.exists({
+      table: "clients",
+      column: "id",
+    }),
+  ]),
+  localId: schema.number([
+    rules.exists({
+      table: "locals",
+      column: "id",
+    }),
+  ]),
+  technicianId: schema.number.optional([
+    rules.exists({
+      table: "users",
+      column: "id",
+    }),
+  ]),
+  type: schema.enum(["single", "normal"] as const),
+  description: schema.string.optional(),
+});
 
 export default class OrdersController {
   public async getAllOrders({ request, response }: HttpContextContract) {
@@ -25,9 +49,27 @@ export default class OrdersController {
     response.send(orders);
   }
 
-  public async createAClient({}: HttpContextContract) {}
+  public async createOrder({ request, response, auth }: HttpContextContract) {
+    const { user } = auth;
+    const payload = await request.validate({ schema: createOrderValidator });
 
-  public async getClientById({}: HttpContextContract) {}
+    const order = new Order();
+
+    await order.merge({ ...payload, createdBy: user!.id }).save();
+
+    return response.status(201).send(order);
+  }
+
+  public async getOrderById({ params, response }: HttpContextContract) {
+    const { orderId } = params;
+
+    const order = await Order.findOrFail(orderId);
+
+    await order.load("client");
+    await order.load("local");
+
+    return response.send(order);
+  }
 
   public async updateClientById({}: HttpContextContract) {}
 
